@@ -52,13 +52,6 @@ export function minFAS(graph) {
           found = true;
           s2.push(node);
           remove(node);
-          /*nodes.delete(node)
-                  for (let link of node.targetLinks) {
-                      if (nodes.has(link.source)) {
-                          let subdegree = outdegrees.get(link.source)
-                          outdegrees.set(link.source, subdegree - 1)
-                      }
-                  }*/
         }
       }
       if (!found) {
@@ -74,13 +67,6 @@ export function minFAS(graph) {
           found = true;
           s1.push(node);
           remove(node);
-          /*nodes.delete(node)
-                  for (let link of node.sourceLinks) {
-                      if (nodes.has(link.target)) {
-                          let subdegree = indegrees.get(link.target)
-                          indegrees.get(link.target, subdegree - 1)
-                      }
-                  }*/
         }
       }
       if (!found) {

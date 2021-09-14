@@ -1,4 +1,4 @@
-import { max, min, sum } from 'd3-array';
+import { max, sum } from 'd3-array';
 import { justify } from './align.js';
 import constant from './constant.js';
 import { minFAS } from './cycle.js';
@@ -54,7 +54,9 @@ function computeLinkBreadths({ nodes }) {
 
 export default function Sankey() {
   let x0 = 0,
-    y0 = 0; // origin , x1 = 1, y1 = 1; // extent
+    y0 = 0,
+    x1 = 1,
+    y1 = 1; // extent
   let dx = 24; // nodeWidth
   let linkLength = 100; // linkLength
   let maxHeight = 100; // maxNodeHeight
@@ -135,13 +137,25 @@ export default function Sankey() {
     return arguments.length ? ((linkSort = _), sankey) : linkSort;
   };
 
-  /*sankey.size = function(_) {
-    return arguments.length ? (x0 = y0 = 0, x1 = +_[0], y1 = +_[1], sankey) : [x1 - x0, y1 - y0];
+  sankey.size = function (_) {
+    return arguments.length
+      ? ((x0 = y0 = 0), (x1 = +_[0]), (y1 = +_[1]), sankey)
+      : [x1 - x0, y1 - y0];
   };
 
-  sankey.extent = function(_) {
-    return arguments.length ? (x0 = +_[0][0], x1 = +_[1][0], y0 = +_[0][1], y1 = +_[1][1], sankey) : [[x0, y0], [x1, y1]];
-  };*/
+  sankey.extent = function (_) {
+    return arguments.length
+      ? ((x0 = +_[0][0]),
+        (x1 = +_[1][0]),
+        (y0 = +_[0][1]),
+        (y1 = +_[1][1]),
+        sankey)
+      : [
+          [x0, y0],
+          [x1, y1],
+        ];
+  };
+
   sankey.origin = function (_) {
     return arguments.length ? ((x0 = +_[0]), (y0 = +_[1]), sankey) : [x0, y0];
   };
