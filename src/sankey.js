@@ -1,6 +1,7 @@
 import { max, min, sum } from 'd3-array';
 import { justify } from './align.js';
 import constant from './constant.js';
+import { minFAS } from './cycle.js';
 
 function ascendingSourceBreadth(a, b) {
   return ascendingBreadth(a.source, b.source) || a.index - b.index;
@@ -53,12 +54,11 @@ function computeLinkBreadths({ nodes }) {
 
 export default function Sankey() {
   let x0 = 0,
-    y0 = 0,
-    x1 = 1,
-    y1 = 1; // extent
+    y0 = 0; // origin , x1 = 1, y1 = 1; // extent
   let dx = 24; // nodeWidth
-  let dy = 8,
-    py; // nodePadding
+  let linkLength = 100; // linkLength
+  let maxHeight = 100; // maxNodeHeight
+  let py = 8; // nodePadding
   let id = defaultId;
   let align = justify;
   let sort;
@@ -74,6 +74,7 @@ export default function Sankey() {
     };
     computeNodeLinks(graph);
     computeNodeValues(graph);
+    computeReversedLinks(graph);
     computeNodeDepths(graph);
     computeNodeHeights(graph);
     computeNodeBreadths(graph);
@@ -106,8 +107,16 @@ export default function Sankey() {
     return arguments.length ? ((dx = +_), sankey) : dx;
   };
 
+  sankey.linkLength = function (_) {
+    return arguments.length ? ((linkLength = +_), sankey) : linkLength;
+  };
+
+  sankey.maxNodeHeight = function (_) {
+    return arguments.length ? ((maxHeight = +_), sankey) : maxHeight;
+  };
+
   sankey.nodePadding = function (_) {
-    return arguments.length ? ((dy = py = +_), sankey) : dy;
+    return arguments.length ? ((py = +_), sankey) : py;
   };
 
   sankey.nodes = function (_) {
@@ -126,23 +135,15 @@ export default function Sankey() {
     return arguments.length ? ((linkSort = _), sankey) : linkSort;
   };
 
-  sankey.size = function (_) {
-    return arguments.length
-      ? ((x0 = y0 = 0), (x1 = +_[0]), (y1 = +_[1]), sankey)
-      : [x1 - x0, y1 - y0];
+  /*sankey.size = function(_) {
+    return arguments.length ? (x0 = y0 = 0, x1 = +_[0], y1 = +_[1], sankey) : [x1 - x0, y1 - y0];
   };
 
-  sankey.extent = function (_) {
-    return arguments.length
-      ? ((x0 = +_[0][0]),
-        (x1 = +_[1][0]),
-        (y0 = +_[0][1]),
-        (y1 = +_[1][1]),
-        sankey)
-      : [
-          [x0, y0],
-          [x1, y1],
-        ];
+  sankey.extent = function(_) {
+    return arguments.length ? (x0 = +_[0][0], x1 = +_[1][0], y0 = +_[0][1], y1 = +_[1][1], sankey) : [[x0, y0], [x1, y1]];
+  };*/
+  sankey.origin = function (_) {
+    return arguments.length ? ((x0 = +_[0]), (y0 = +_[1]), sankey) : [x0, y0];
   };
 
   sankey.iterations = function (_) {
@@ -166,21 +167,19 @@ export default function Sankey() {
       source.sourceLinks.push(link);
       target.targetLinks.push(link);
     }
-    if (linkSort != null) {
-      for (const { sourceLinks, targetLinks } of nodes) {
-        sourceLinks.sort(linkSort);
-        targetLinks.sort(linkSort);
-      }
-    }
   }
 
   function computeNodeValues({ nodes }) {
     for (const node of nodes) {
-      node.value =
-        node.fixedValue === undefined
-          ? Math.max(sum(node.sourceLinks, value), sum(node.targetLinks, value))
-          : node.fixedValue;
+      node.value = Math.max(
+        sum(node.sourceLinks, value),
+        sum(node.targetLinks, value)
+      );
     }
+  }
+
+  function computeReversedLinks(graph) {
+    minFAS(graph);
   }
 
   function computeNodeDepths({ nodes }) {
@@ -191,8 +190,15 @@ export default function Sankey() {
     while (current.size) {
       for (const node of current) {
         node.depth = x;
-        for (const { target } of node.sourceLinks) {
-          next.add(target);
+        for (const { target, direction } of node.sourceLinks) {
+          if (direction === 'forward') {
+            next.add(target);
+          }
+        }
+        for (const { source, direction } of node.targetLinks) {
+          if (direction === 'backward') {
+            next.add(source);
+          }
         }
       }
       if (++x > n) throw new Error('circular link');
@@ -209,8 +215,15 @@ export default function Sankey() {
     while (current.size) {
       for (const node of current) {
         node.height = x;
-        for (const { source } of node.targetLinks) {
-          next.add(source);
+        for (const { source, direction } of node.targetLinks) {
+          if (direction === 'forward') {
+            next.add(source);
+          }
+        }
+        for (const { target, direction } of node.sourceLinks) {
+          if (direction === 'backward') {
+            next.add(target);
+          }
         }
       }
       if (++x > n) throw new Error('circular link');
@@ -221,7 +234,7 @@ export default function Sankey() {
 
   function computeNodeLayers({ nodes }) {
     const x = max(nodes, (d) => d.depth) + 1;
-    const kx = (x1 - x0 - dx) / (x - 1);
+    const kx = dx + linkLength;
     const columns = new Array(x);
     for (const node of nodes) {
       const i = Math.max(
@@ -242,10 +255,10 @@ export default function Sankey() {
   }
 
   function initializeNodeBreadths(columns) {
-    const ky = min(
-      columns,
-      (c) => (y1 - y0 - (c.length - 1) * py) / sum(c, value)
-    );
+    const maxValue = max(columns, (c) => max(c, value));
+    const ky = maxHeight / maxValue;
+    const y1 = max(columns, (c) => (c.length - 1) * py + sum(c, value) * ky);
+    //const ky = min(columns, c => (y1 - y0 - (c.length - 1) * py) / sum(c, value));
     for (const nodes of columns) {
       let y = y0;
       for (const node of nodes) {
@@ -264,22 +277,22 @@ export default function Sankey() {
       }
       reorderLinks(nodes);
     }
+    return y1;
   }
 
   function computeNodeBreadths(graph) {
     const columns = computeNodeLayers(graph);
-    py = Math.min(dy, (y1 - y0) / (max(columns, (c) => c.length) - 1));
-    initializeNodeBreadths(columns);
+    const y1 = initializeNodeBreadths(columns);
     for (let i = 0; i < iterations; ++i) {
       const alpha = Math.pow(0.99, i);
       const beta = Math.max(1 - alpha, (i + 1) / iterations);
-      relaxRightToLeft(columns, alpha, beta);
-      relaxLeftToRight(columns, alpha, beta);
+      relaxRightToLeft(columns, alpha, beta, y1);
+      relaxLeftToRight(columns, alpha, beta, y1);
     }
   }
 
   // Reposition each node based on its incoming (target) links.
-  function relaxLeftToRight(columns, alpha, beta) {
+  function relaxLeftToRight(columns, alpha, beta, y1) {
     for (let i = 1, n = columns.length; i < n; ++i) {
       const column = columns[i];
       for (const target of column) {
@@ -297,12 +310,12 @@ export default function Sankey() {
         reorderNodeLinks(target);
       }
       if (sort === undefined) column.sort(ascendingBreadth);
-      resolveCollisions(column, beta);
+      resolveCollisions(column, beta, y1);
     }
   }
 
   // Reposition each node based on its outgoing (source) links.
-  function relaxRightToLeft(columns, alpha, beta) {
+  function relaxRightToLeft(columns, alpha, beta, y1) {
     for (let n = columns.length, i = n - 2; i >= 0; --i) {
       const column = columns[i];
       for (const source of column) {
@@ -320,11 +333,11 @@ export default function Sankey() {
         reorderNodeLinks(source);
       }
       if (sort === undefined) column.sort(ascendingBreadth);
-      resolveCollisions(column, beta);
+      resolveCollisions(column, beta, y1);
     }
   }
 
-  function resolveCollisions(nodes, alpha) {
+  function resolveCollisions(nodes, alpha, y1) {
     const i = nodes.length >> 1;
     const subject = nodes[i];
     resolveCollisionsBottomToTop(nodes, subject.y0 - py, i - 1, alpha);
